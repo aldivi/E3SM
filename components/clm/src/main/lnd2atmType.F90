@@ -6,13 +6,13 @@ module lnd2atmType
   !
   ! !USES:
   use shr_kind_mod  , only : r8 => shr_kind_r8
-  use shr_infnan_mod, only : nan => shr_infnan_nan, assignment(=)
+  !use shr_infnan_mod, only : nan => shr_infnan_nan, assignment(=)
   use shr_log_mod   , only : errMsg => shr_log_errMsg
   use shr_megan_mod , only : shr_megan_mechcomps_n
   use clm_varpar    , only : numrad, ndst, nlevgrnd !ndst = number of dust bins.
   use clm_varcon    , only : rair, grav, cpair, hfus, tfrz, spval
   use clm_varctl    , only : iulog, use_c13, use_cn, use_lch4
-  use seq_drydep_mod, only : n_drydep, drydep_method, DD_XLND
+  use seq_drydep_mod_elm, only : n_drydep, drydep_method, DD_XLND
   use decompMod     , only : bounds_type
   !
   ! !PUBLIC TYPES:
@@ -65,8 +65,8 @@ module lnd2atmType
    contains
 
      procedure, public  :: Init
-     procedure, private :: InitAllocate 
-     procedure, private :: InitHistory  
+     procedure, private :: InitAllocate
+     procedure, private :: InitHistory
 
   end type lnd2atm_type
   !------------------------------------------------------------------------
@@ -77,11 +77,11 @@ contains
   subroutine Init(this, bounds)
 
     class(lnd2atm_type) :: this
-    type(bounds_type), intent(in) :: bounds  
+    type(bounds_type), intent(in) :: bounds
 
     call this%InitAllocate(bounds)
     call this%InitHistory(bounds)
-    
+
   end subroutine Init
 
   !------------------------------------------------------------------------
@@ -92,7 +92,7 @@ contains
     !
     ! !ARGUMENTS:
     class (lnd2atm_type) :: this
-    type(bounds_type), intent(in) :: bounds  
+    type(bounds_type), intent(in) :: bounds
     !
     ! !LOCAL VARIABLES:
     real(r8) :: ival  = 0.0_r8  ! initial value
@@ -101,41 +101,41 @@ contains
 
     begg = bounds%begg; endg= bounds%endg
 
-    allocate(this%t_rad_grc            (begg:endg))            ; this%t_rad_grc            (:) =ival
-    allocate(this%t_ref2m_grc          (begg:endg))            ; this%t_ref2m_grc          (:) =ival
-    allocate(this%q_ref2m_grc          (begg:endg))            ; this%q_ref2m_grc          (:) =ival
-    allocate(this%u_ref10m_grc         (begg:endg))            ; this%u_ref10m_grc         (:) =ival
-    allocate(this%h2osno_grc           (begg:endg))            ; this%h2osno_grc           (:) =ival
-    allocate(this%h2osoi_vol_grc       (begg:endg,1:nlevgrnd)) ; this%h2osoi_vol_grc     (:,:) =ival
-    allocate(this%albd_grc             (begg:endg,1:numrad))   ; this%albd_grc           (:,:) =ival
-    allocate(this%albi_grc             (begg:endg,1:numrad))   ; this%albi_grc           (:,:) =ival
-    allocate(this%taux_grc             (begg:endg))            ; this%taux_grc             (:) =ival
-    allocate(this%tauy_grc             (begg:endg))            ; this%tauy_grc             (:) =ival
-    allocate(this%eflx_lwrad_out_grc   (begg:endg))            ; this%eflx_lwrad_out_grc   (:) =ival
-    allocate(this%eflx_sh_tot_grc      (begg:endg))            ; this%eflx_sh_tot_grc      (:) =ival
-    allocate(this%eflx_lh_tot_grc      (begg:endg))            ; this%eflx_lh_tot_grc      (:) =ival
-    allocate(this%qflx_evap_tot_grc    (begg:endg))            ; this%qflx_evap_tot_grc    (:) =ival
-    allocate(this%fsa_grc              (begg:endg))            ; this%fsa_grc              (:) =ival
-    allocate(this%nee_grc              (begg:endg))            ; this%nee_grc              (:) =ival
-    allocate(this%nem_grc              (begg:endg))            ; this%nem_grc              (:) =ival
-    allocate(this%ram1_grc             (begg:endg))            ; this%ram1_grc             (:) =ival
-    allocate(this%fv_grc               (begg:endg))            ; this%fv_grc               (:) =ival
-    allocate(this%flxdst_grc           (begg:endg,1:ndst))     ; this%flxdst_grc         (:,:) =ival
-    allocate(this%flux_ch4_grc         (begg:endg))            ; this%flux_ch4_grc         (:) =ival
-    allocate(this%qflx_rofliq_grc      (begg:endg))            ; this%qflx_rofliq_grc      (:) =ival
-    allocate(this%qflx_rofliq_qsur_grc (begg:endg))            ; this%qflx_rofliq_qsur_grc (:) =ival
-    allocate(this%qflx_rofliq_qsurp_grc(begg:endg))            ; this%qflx_rofliq_qsurp_grc(:) =ival
-    allocate(this%qflx_rofliq_qsub_grc (begg:endg))            ; this%qflx_rofliq_qsub_grc (:) =ival
-    allocate(this%qflx_rofliq_qsubp_grc(begg:endg))            ; this%qflx_rofliq_qsubp_grc(:) =ival
-    allocate(this%qflx_rofliq_qgwl_grc (begg:endg))            ; this%qflx_rofliq_qgwl_grc (:) =ival
-    allocate(this%qflx_rofice_grc      (begg:endg))            ; this%qflx_rofice_grc      (:) =ival
+    allocate(this%t_rad_grc            (begg:endg))            ; this%t_rad_grc            (:) = ival
+    allocate(this%t_ref2m_grc          (begg:endg))            ; this%t_ref2m_grc          (:) = ival
+    allocate(this%q_ref2m_grc          (begg:endg))            ; this%q_ref2m_grc          (:) = ival
+    allocate(this%u_ref10m_grc         (begg:endg))            ; this%u_ref10m_grc         (:) = ival
+    allocate(this%h2osno_grc           (begg:endg))            ; this%h2osno_grc           (:) = ival
+    allocate(this%h2osoi_vol_grc       (begg:endg,1:nlevgrnd)) ; this%h2osoi_vol_grc     (:,:) = ival
+    allocate(this%albd_grc             (begg:endg,1:numrad))   ; this%albd_grc           (:,:) = ival
+    allocate(this%albi_grc             (begg:endg,1:numrad))   ; this%albi_grc           (:,:) = ival
+    allocate(this%taux_grc             (begg:endg))            ; this%taux_grc             (:) = ival
+    allocate(this%tauy_grc             (begg:endg))            ; this%tauy_grc             (:) = ival
+    allocate(this%eflx_lwrad_out_grc   (begg:endg))            ; this%eflx_lwrad_out_grc   (:) = ival
+    allocate(this%eflx_sh_tot_grc      (begg:endg))            ; this%eflx_sh_tot_grc      (:) = ival
+    allocate(this%eflx_lh_tot_grc      (begg:endg))            ; this%eflx_lh_tot_grc      (:) = ival
+    allocate(this%qflx_evap_tot_grc    (begg:endg))            ; this%qflx_evap_tot_grc    (:) = ival
+    allocate(this%fsa_grc              (begg:endg))            ; this%fsa_grc              (:) = ival
+    allocate(this%nee_grc              (begg:endg))            ; this%nee_grc              (:) = ival
+    allocate(this%nem_grc              (begg:endg))            ; this%nem_grc              (:) = ival
+    allocate(this%ram1_grc             (begg:endg))            ; this%ram1_grc             (:) = ival
+    allocate(this%fv_grc               (begg:endg))            ; this%fv_grc               (:) = ival
+    allocate(this%flxdst_grc           (begg:endg,1:ndst))     ; this%flxdst_grc         (:,:) = ival
+    allocate(this%flux_ch4_grc         (begg:endg))            ; this%flux_ch4_grc         (:) = ival
+    allocate(this%qflx_rofliq_grc      (begg:endg))            ; this%qflx_rofliq_grc      (:) = ival
+    allocate(this%qflx_rofliq_qsur_grc (begg:endg))            ; this%qflx_rofliq_qsur_grc (:) = ival
+    allocate(this%qflx_rofliq_qsurp_grc(begg:endg))            ; this%qflx_rofliq_qsurp_grc(:) = ival
+    allocate(this%qflx_rofliq_qsub_grc (begg:endg))            ; this%qflx_rofliq_qsub_grc (:) = ival
+    allocate(this%qflx_rofliq_qsubp_grc(begg:endg))            ; this%qflx_rofliq_qsubp_grc(:) = ival
+    allocate(this%qflx_rofliq_qgwl_grc (begg:endg))            ; this%qflx_rofliq_qgwl_grc (:) = ival
+    allocate(this%qflx_rofice_grc      (begg:endg))            ; this%qflx_rofice_grc      (:) = ival
 
-    allocate(this%qflx_rofliq_qsur_doc_grc(begg:endg))          ; this%qflx_rofliq_qsur_doc_grc(:) = ival
-    allocate(this%qflx_rofliq_qsur_dic_grc(begg:endg))          ; this%qflx_rofliq_qsur_dic_grc(:) = ival
-    allocate(this%qflx_rofliq_qsub_doc_grc(begg:endg))          ; this%qflx_rofliq_qsub_doc_grc(:) = ival
-    allocate(this%qflx_rofliq_qsub_dic_grc(begg:endg))          ; this%qflx_rofliq_qsub_dic_grc(:) = ival 
+    allocate(this%qflx_rofliq_qsur_doc_grc(begg:endg))         ; this%qflx_rofliq_qsur_doc_grc(:) = ival
+    allocate(this%qflx_rofliq_qsur_dic_grc(begg:endg))         ; this%qflx_rofliq_qsur_dic_grc(:) = ival
+    allocate(this%qflx_rofliq_qsub_doc_grc(begg:endg))         ; this%qflx_rofliq_qsub_doc_grc(:) = ival
+    allocate(this%qflx_rofliq_qsub_dic_grc(begg:endg))         ; this%qflx_rofliq_qsub_dic_grc(:) = ival
 
-    if (shr_megan_mechcomps_n>0) then
+    if (shr_megan_mechcomps_n > 0 ) then
        allocate(this%flxvoc_grc(begg:endg,1:shr_megan_mechcomps_n));  this%flxvoc_grc(:,:)=ival
     endif
     if ( n_drydep > 0 .and. drydep_method == DD_XLND )then
@@ -152,7 +152,7 @@ contains
     !
     ! !ARGUMENTS:
     class(lnd2atm_type) :: this
-    type(bounds_type), intent(in) :: bounds  
+    type(bounds_type), intent(in) :: bounds
     !
     ! !LOCAL VARIABLES:
     integer  :: begg, endg
@@ -164,7 +164,7 @@ contains
     call hist_addfld1d (fname='FSH', units='W/m^2',  &
          avgflag='A', long_name='sensible heat', &
          ptr_lnd=this%eflx_sh_tot_grc)
-       
+
     this%qflx_rofliq_grc(begg:endg) = 0._r8
     call hist_addfld1d (fname='QRUNOFF',  units='mm/s',  &
          avgflag='A', long_name='total liquid runoff (does not include QSNWCPICE)', &
@@ -188,5 +188,6 @@ contains
     end if
 
   end subroutine InitHistory
+
 
 end module lnd2atmType

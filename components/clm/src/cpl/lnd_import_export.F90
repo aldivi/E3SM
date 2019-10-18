@@ -26,8 +26,7 @@ contains
     !
     ! !USES:
     use clm_varctl       , only: co2_type, co2_ppmv, iulog, use_c13, create_glacier_mec_landunit, &
-                                 metdata_type, metdata_bypass, metdata_biases, co2_file, aero_file, &
-                                 use_nofire, use_fates
+                                 metdata_type, metdata_bypass, metdata_biases, co2_file, aero_file
     use clm_varctl       , only: add_temperature, add_co2
     use clm_varctl       , only: startdate_add_temperature, startdate_add_co2
     use clm_varcon       , only: rair, o2_molar_const, c13ratio
@@ -291,7 +290,6 @@ contains
             atm2lnd_vars%endyear_met_trans = 2012 
           else if (atm2lnd_vars%metsource == 4) then 
             atm2lnd_vars%endyear_met_trans  = 2014
-            if(index(metdata_type, 'v1') .gt. 0) atm2lnd_vars%endyear_met_trans  = 2010
           else if (atm2lnd_vars%metsource == 5) then
             atm2lnd_vars%startyear_met      = 566 !76
             atm2lnd_vars%endyear_met_spinup = 590 !100
@@ -386,9 +384,7 @@ contains
                 end if
             else if (atm2lnd_vars%metsource == 4) then 
                 metdata_fname = 'GSWP3_' // trim(metvars(v)) // '_1901-2014_z' // zst(2:3) // '.nc'
-                if(index(metdata_type, 'v1') .gt. 0) &
-                    metdata_fname = 'GSWP3_' // trim(metvars(v)) // '_1901-2010_z' // zst(2:3) // '.nc'
-
+                print *,"metdata fname:", 'GSWP3_' // trim(metvars(v)) // '_1901-2014_z' // zst(2:3) // '.nc'
                 if (use_livneh .and. ztoget .ge. 16 .and. ztoget .le. 20) then 
                     metdata_fname = 'GSWP3_Livneh_' // trim(metvars(v)) // '_1950-2010_z' // zst(2:3) // '.nc'                
                 else if (use_daymet .and. ztoget .ge. 16 .and. ztoget .le. 20) then 
@@ -415,13 +411,12 @@ contains
             atm2lnd_vars%timelen_spinup(v) = nyears_spinup*(365*nint(24./atm2lnd_vars%timeres(v)))
     
             ierr = nf90_inq_varid(met_ncids(v), trim(metvars(v)), varid)
-
             !get the conversion factors
             ierr = nf90_get_att(met_ncids(v), varid, 'scale_factor', atm2lnd_vars%scale_factors(v))
-            if (ierr .ne. 0) atm2lnd_vars%scale_factors(v) = 1.0d0
+            !if(ierr.ne. 0) atm2lnd_vars%scale_factors(v) = 1.0d0
 
             ierr = nf90_get_att(met_ncids(v), varid, 'add_offset', atm2lnd_vars%add_offsets(v))
-            if (ierr .ne. 0) atm2lnd_vars%add_offsets(v) = 0.0d0
+            !if(ierr .ne. 0) atm2lnd_vars%add_offsets(v) = 0.0d0
 
             !get the met data	     
             starti(1) = 1
@@ -480,11 +475,9 @@ contains
             if (atm2lnd_vars%metsource == 5) mystart=1850
 
             if (yr .lt. 1850) then 
-              !atm2lnd_vars%tindex(g,v,1) = (mod(yr-1,nyears_spinup) + (1850-mystart)) * 365 * nint(24./atm2lnd_vars%timeres(v))
-              atm2lnd_vars%tindex(g,v,1) = mod(yr+1849-mystart,nyears_spinup) * 365 * nint(24./atm2lnd_vars%timeres(v))
+              atm2lnd_vars%tindex(g,v,1) = (mod(yr-1,nyears_spinup) + (1850-mystart)) * 365 * nint(24./atm2lnd_vars%timeres(v))
             else if (yr .le. atm2lnd_vars%endyear_met_spinup) then
-              !atm2lnd_vars%tindex(g,v,1) = (mod(yr-1850,nyears_spinup) + (1850-mystart)) * 365 * nint(24./atm2lnd_vars%timeres(v))
-              atm2lnd_vars%tindex(g,v,1) = mod(yr-mystart,nyears_spinup) * 365 * nint(24./atm2lnd_vars%timeres(v))
+              atm2lnd_vars%tindex(g,v,1) = (mod(yr-1850,nyears_spinup) + (1850-mystart)) * 365 * nint(24./atm2lnd_vars%timeres(v))
             else
               atm2lnd_vars%tindex(g,v,1) = (yr - atm2lnd_vars%startyear_met) * 365 * nint(24./atm2lnd_vars%timeres(v))
             end if
@@ -700,9 +693,7 @@ contains
         nindex(2) = nindex(1)+1
         if (yr .lt. 1850) nindex(1:2) = 2
         if (yr .ge. 2010) nindex(1:2) = 161
-
-       if ((use_fates .eqv. .false.) .and. &
-           (use_nofire .eqv. .false.)) then
+      
         if (atm2lnd_vars%loaded_bypassdata == 0 .or. (mon .eq. 1 .and. day .eq. 1 .and. tod .eq. 0)) then  
           if (masterproc .and. i .eq. 1) then 
               ! Read pop_dens streams namelist to get filename
@@ -842,7 +833,6 @@ contains
 
         !Lightning data is 3-hourly.  Does not currently interpolate.
         atm2lnd_vars%forc_lnfm(g) = atm2lnd_vars%lnfm(g, ((int(thiscalday)-1)*8+tod/(3600*3))+1)
-       end if   !end of .not.FATES .and. .not.nofire statement
 
    !------------------------------------Nitrogen deposition----------------------------------------------
 
