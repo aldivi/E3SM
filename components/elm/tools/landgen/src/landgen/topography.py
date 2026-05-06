@@ -31,7 +31,7 @@ from .shared_data import TopoData, TopoManager
 
 ## output
 
-def run(active, out_fname, com_config_dict, out_grid_data, manager, grid_manager):
+def run(active, out_fname, com_config_dict, out_grid_data, manager, grid_manager, decomp_indices, decomp_ll_limits):
     if active is False:
         print(f"Topography processing is not active, but reading in landfrac data for other active modules.")
         output_file = Path(com_config_dict['out_path']) / out_fname

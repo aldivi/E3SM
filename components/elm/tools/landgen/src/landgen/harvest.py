@@ -13,6 +13,17 @@ from . import landgen_io
 import pandas as pd
 import os
 
+########## define some module-specific constants here
+
+# Default harvest variable names from LUH2 transitions.nc
+LUH2_HARVEST_VARS = [
+    'primf_harv',   # wood harvest area from primary forest land
+    'primn_harv',   # wood harvest area from primary non forest land
+    'secmf_harv',   # wood harvest area from secondary mature forest land
+    'secyf_harv',   # wood harvest area from secondary young forest land
+    'secnf_harv',   # wood harvest area from secondary non forest land
+]
+
 ########## define helper functions for harvest run() here
 
 ##### harvest_process()
@@ -47,7 +58,7 @@ def harvest_process(lt_year_data, year, harvest_path, harvest_name, grazing_path
     # --- regrid and store harvest variables into lt_year_data.harvest_frac ---
     # LUH2_HARVEST_VARS order matches the n_harvest=5 dimension in LtData:
     #   index 0: primf_harv, 1: primn_harv, 2: secmf_harv, 3: secyf_harv, 4: secnf_harv
-    for i, varname in enumerate(landgen_io.LUH2_HARVEST_VARS):
+    for i, varname in enumerate(LUH2_HARVEST_VARS):
         regridded = landgen_io.regrid_to_landgen_grid(
             harvest_data[varname],
             harvest_data['lat'],
@@ -85,7 +96,7 @@ def harvest_process(lt_year_data, year, harvest_path, harvest_name, grazing_path
 ## this sets up the pool and calls the harvest_process() function for each chunk of data
 
 def run(lt_year_data, year, prev_year, harvest_path, harvest_name, grazing_path, grazing_names,
-        com_config_dict, out_grid_data, manager, grid_manager, lt_manager):
+        com_config_dict, out_grid_data, manager, grid_manager, lt_manager, decomp_indices, decomp_ll_limits):
 
     print(f"Processing harvest module with parameters:")
     # todo: print the parameters here
@@ -124,10 +135,10 @@ def run(lt_year_data, year, prev_year, harvest_path, harvest_name, grazing_path,
     # the results will be stored directly in the lt_year_data shared structure
 
     # get the manager locks for the shared data structures
-    # all locks come from the main mp.Manager() (SyncManager); custom managers don't support Lock()
+    # using data-specific locks, watch out for deadlocks.  
     man_lock  = manager.Lock()
-    grid_lock = manager.Lock()
-    lt_lock   = manager.Lock()
+    grid_lock = grid_manager.lock()
+    lt_lock   = lt_manager.lock()
 
     # Build data_chunks: one tuple per spatial chunk covering the globe in 10x10 degree boxes.
     # For each chunk, filter the global mesh to cells whose centroid lat/lon falls within the box.

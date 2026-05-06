@@ -9,10 +9,10 @@ import multiprocessing as mp
 #import importlib
 from pathlib import Path
 from . import shared_data
-import landcover_remote_sensing # not created yet
+from . import landgen_io
+import landcover_remote_sensing as lc_rs # not created yet
 import transitions # not created yet
 import normalize_cell # not created yet
-import pandas as pd
 import os
 
 ########## define helper functions for landcover run() here
@@ -32,11 +32,12 @@ import os
 ## output
 
 def landcover_process(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
-                            com_config_dict, out_grid_data, ll_limits, cell_ids,
+                            com_config_dict, out_grid_data, cell_indices, ll_limits,
                             man_lock, grid_lock, lt_lock):
 
+    # todo: need to sort out printing from multiple proceses
     print(f"Processing landcover module year {year} with parameters:")
-    # todo: print the parameters here
+    # todo: print the parameters here?
 
     # todo: use the with man_lock:, with grid_lock:, with lt_lock: syntax for accessing each managed data structure
 
@@ -86,6 +87,7 @@ def landcover_process(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_
     #todo: this can be in a utils module because other modules need to read these source data 
     lai_data = read_lai_data(year, com_config_dict['source_data_path'], lai_path)
 
+    #######
     # todo: use uraster to convert lc_rs_data and climate data and lai data to the landgen grid
 
     # convert lc_rs_data to the elm land types; this is igbp to generic elm land type mapping
@@ -113,7 +115,7 @@ def landcover_process(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_
 ## this sets up the pool and calls the landcover_process() function for each chunk of data
 
 def run(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
-                            com_config_dict, out_grid_data, ll_limits, cell_ids,
+                            com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits,
                             manager, grid_manager, lt_manager):
 
 
@@ -140,15 +142,15 @@ def run(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
 
     # set up the pool and call the landcover_process() function for each chunk of data
     # chunks are defined by the lat-lon limits and corresponding landgen grid cell ids for the chunk;
-    #    these are created in land_type.process_single_year() and passed to this run() function as lists?
+    #    these are created in land_type.process_single_year() and passed to this run() function as lists of decomp_ll_limits?
     # there are more chunks than cpus; the pool will manage this for efficiency because chunks vary in size
     # the results will be stored directly in the lt_year_data shared structure
 
     # get the manager locks for the shared data structures
-    # all locks come from the main mp.Manager() (SyncManager); custom managers don't support Lock()
+    # using data-specific locks, watch out for deadlocks.  
     man_lock  = manager.Lock()
-    grid_lock = manager.Lock()
-    lt_lock   = manager.Lock()
+    grid_lock = grid_manager.lock()
+    lt_lock   = lt_manager.lock()
 
 ## todo: figure out the data to pass here
 # each chunk is a tuple of the arguments for landcover_process, residing in a list
@@ -158,33 +160,20 @@ def run(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
 #          (lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
 #           com_config_dict, out_grid_data, ll_limits2, cell_ids2, man_lock, grid_lock, lt_lock), etc]
 
-    # load HEALPix mesh to map ll_limits chunks to cell ids
-    global_parquet_path = (
-        Path(com_config_dict['source_data_path'])
-        / Path(com_config_dict['landgen_grid_path']).parent
-        / 'merged_land_cells.parquet'
-    )
-    global_mesh_df = pd.read_parquet(global_parquet_path)
-
+    ## todo: check that this is correct
+    # create the list of chunk data
     data_chunks = []
-    for ll in ll_limits:
-        min_lat, max_lat, min_lon, max_lon = ll
-        mask = (
-            (global_mesh_df['lat'] >= min_lat) & (global_mesh_df['lat'] < max_lat) &
-            (global_mesh_df['lon'] >= min_lon) & (global_mesh_df['lon'] < max_lon)
-        )
-        chunk_cell_ids = global_mesh_df.loc[mask, 'cellid'].values
-        if len(chunk_cell_ids) == 0:
-            continue  # skip ocean-only or empty chunks
+    for cidx in range(len(decomp_indices)):
+        # this list includes only cells in the landgen grid file
         data_chunks.append((
             lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
-            com_config_dict, out_grid_data, ll, chunk_cell_ids,
+            com_config_dict, out_grid_data, decomp_indices[cidx], decomp_ll_limits[cidx],
             man_lock, grid_lock, lt_lock,
         ))
 
     print(f"  Submitting {len(data_chunks)} landcover chunks to pool of {omp_threads_int} workers")
 
-
+    # submit the chunks to the pool
     with mp.Pool(processes=omp_threads_int) as pool:
         pool.starmap(landcover_process, data_chunks)
 
