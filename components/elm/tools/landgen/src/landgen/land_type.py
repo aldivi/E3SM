@@ -7,18 +7,24 @@
 
 import multiprocessing as mp
 import importlib
+import logging
 from pathlib import Path
 from . import shared_data
-from .shared_data import LtData, LtManager
+from shared_data import LtData, LtManager
 import numpy as np
+impoart . landgen_io
+import . tools
+
+logger = logging.getLogger('landgen')
 
 ########## define helper functions for land_type here
 
 
 ##### _process_single_year()
 def _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, lc_rs_name, crop_path, urban_path,
-                         lake_path, ice_path, wetland_path, harvest_path, harvest_name, grazing_path, grazing_names, assoc_path, com_config_dict, out_grid_data,
-                         manager, grid_manager, lt_manager, decomp_indices, decomp_ll_limits):
+                         lake_path, ice_path, wetland_path, harvest_path, harvest_name, grazing_path, grazing_names,
+                         veg_assoc_path, com_config_dict, out_grid_data,
+                         manager, decomp_indices, decomp_ll_limits):
     """Process land type data for a single year."""
 
     # arguments
@@ -28,79 +34,82 @@ def _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, l
 
     # other arguments are described below for the run() function
 
-#todo: put this where needed
-# per chunk i:
-# mesh_data = landgen_io.load_mesh_nc(mesh_nc_path, indices=decomp_indices[i])
-# mesh_data['cellid'], ['xv'], ['yv'] -> write_chunk_mesh_to_geojson
-# chunk_ll_limits[i]                  -> write_latlon_to_geotiff (tight vertex bbox)
-    # arguments for each run function below will include data chunk list with the lat/lon limits and cell ids for the chunk
-    #    or the entire list is created here
-    # the chunked data are a list of tuples with each argument; 
-    #    an example is that the static arguments here will be repeated in each tuple,
-    #  and the lat/lon and cell ids will be different for each chunk
-    # this info will have to be passed to the run functions below
 
 
+## todo: need to figure out how to use static data that has already been processed for the first year
+# maybe: if prev_year is not None and a submodule is static (submod_dyn==false) then use data from previous year file
 
 
     # Process landcover
-    # derive prev_fname from out_fname and prev_year by inserting the year before the file extension
-    # e.g. landgen_land_type.nc -> landgen_land_type_2009.nc
-    if prev_year is not None:
-        stem, suffix = out_fname.rsplit('.', 1)
-        prev_fname = f"{stem}_{prev_year}.{suffix}"
-    else:
-        prev_fname = None
-    # each module's run function calls the multiple processes because these modules need to be done sequentially
-    landcover = importlib.import_module('landgen.landcover')
-    lc_data = landcover.run(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
-                            com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits, manager, grid_manager, lt_manager)
+    if submod_run['landcover']:
+        # derive prev_fname from out_fname and prev_year by inserting the year before the file extension
+        # e.g. landgen_land_type.nc -> landgen_land_type_2009.nc
+        if prev_year is not None:
+            stem, suffix = out_fname.rsplit('.', 1)
+            prev_fname = f"{stem}_{prev_year}.{suffix}"
+        else:
+            prev_fname = None
+        # each module's run function calls the multiple processes because these modules need to be done sequentially
+        landcover = importlib.import_module('landgen.landcover')
+        landcover.run(lt_year_data, year, prev_year, prev_fname, lc_rs_path, lc_rs_name,
+                            com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits, manager)
 
-    # Process crop data - adjust lc crop area
-    crop = importlib.import_module('landgen.crop')
-    lc_data = crop.run(lt_year_data, year, prev_year, crop_path, com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits,
-                       manager, grid_manager, lt_manager)
+    if submod_run['crop']:
+        # Process crop data - adjust lc crop area
+        crop = importlib.import_module('landgen.crop')
+        lc_data = crop.run(lt_year_data, year, prev_year, crop_path, com_config_dict, out_grid_data,
+                        decomp_indices, decomp_ll_limits, manager)
 
-    # Process urban data - adjust lc urban area
-    urban = importlib.import_module('landgen.urban')
-    lc_data = urban.run(lt_year_data, year, prev_year, urban_path, com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits,
-                        manager, grid_manager, lt_manager)
+    if submod_run['urban']:
+        # Process urban data - adjust lc urban area
+        urban = importlib.import_module('landgen.urban')
+        lc_data = urban.run(lt_year_data, year, prev_year, urban_path, com_config_dict, out_grid_data,
+                            decomp_indices, decomp_ll_limits, manager)
 
-    # Process lake data - adjust lc lake area
-    lake = importlib.import_module('landgen.lake')
-    lc_data = lake.run(lt_year_data, year, prev_year, lake_path, com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits,
-                       manager, grid_manager, lt_manager)
+    
+    if submod_run['lake']:
+        # Process lake data - adjust lc lake area
+        lake = importlib.import_module('landgen.lake')
+        lc_data = lake.run(lt_year_data, year, prev_year, lake_path, com_config_dict, out_grid_data,
+                            decomp_indices, decomp_ll_limits, manager)
 
-    # Process ice data - adjust lc ice area
-    ice = importlib.import_module('landgen.ice')
-    lc_data = ice.run(lt_year_data, year, prev_year, ice_path, com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits,
-                      manager, grid_manager, lt_manager)
+    if submod_run['ice']:
+        # Process ice data - adjust lc ice area
+        ice = importlib.import_module('landgen.ice')
+        lc_data = ice.run(lt_year_data, year, prev_year, ice_path, com_config_dict, out_grid_data,
+                            decomp_indices, decomp_ll_limits, manager)
 
-    # Process wetland data - adjust lc wetland area
-    # (may not be needed as the main source is currently the modis cover data;
-    #  can allow for this in the future)
-    #wetland = importlib.import_module('wetland')
-    #lc_data = wetland.run(lt_year_data, year, prev_year, wetland_path, com_config_dict, out_grid_data, decomp_ll_limits, cell_ids, manager, grid_manager, lt_manager)
+    if submod_run['wetland']:
+        # Process wetland data - adjust lc wetland area
+        # (may not be needed as the main source is currently the modis cover data;
+        #  can allow for this in the future)
+        #wetland = importlib.import_module('landgen.wetland')
+        #lc_data = wetland.run(lt_year_data, year, prev_year, wetland_path, com_config_dict, out_grid_data,
+        #                    decomp_indices, decomp_ll_limits, manager)
 
-    #todo: update this with more efficient decomp and generalized reading and chunking
-    # Process harvest/grazing data - adjust harvest/grazing area
-    harvest = importlib.import_module('landgen.harvest')
-    lc_data = harvest.run(lt_year_data, year, prev_year, harvest_path, harvest_name, grazing_path, grazing_names,
-                          com_config_dict, out_grid_data, manager, grid_manager, lt_manager)
+    if submod_run['harvest']:
+        #todo: update this with more efficient decomp and generalized reading and chunking
+        # Process harvest/grazing data - adjust harvest/grazing area
+        harvest = importlib.import_module('landgen.harvest')
+        lc_data = harvest.run(lt_year_data, year, prev_year, harvest_path, harvest_name, grazing_path,
+                        grazing_names, com_config_dict, out_grid_data, manager)
 
     # Normalize cell
     normalize_cell = importlib.import_module('landgen.normalize_cell')
-    lc_data = normalize_cell.fill_land(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits, manager, grid_manager, lt_manager)       # fill_land
-    lc_data = normalize_cell.reconcile_ocean(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits, manager, grid_manager, lt_manager)  # reconcile_ocean
+    lc_data = normalize_cell.fill_land(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits,
+                    manager)       # fill_land
+    lc_data = normalize_cell.reconcile_ocean(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits,
+                    manager)  # reconcile_ocean
 
-    # Process veg-associated data
-    veg_assoc = importlib.import_module('landgen.veg_assoc')
-    lc_data = veg_assoc.run(lt_year_data, year, prev_year, assoc_path, com_config_dict, out_grid_data, decomp_indices, decomp_ll_limits,
-                            manager, grid_manager, lt_manager)
+    if submod_run['veg_assoc']:
+        # Process veg-associated data
+        veg_assoc = importlib.import_module('landgen.veg_assoc')
+        lc_data = veg_assoc.run(lt_year_data, year, prev_year, veg_assoc_path, com_config_dict, out_grid_data,
+                            decomp_indices, decomp_ll_limits, manager)
 
     # Ensure consistency
     consistency = importlib.import_module('landgen.consistency')
-    lc_data = consistency.run(lt_year_data, year, out_grid_data, decomp_ll_limits, manager, grid_manager, lt_manager)
+    lc_data = consistency.run(lt_year_data, year, out_grid_data, decomp_indices, decomp_ll_limits, manager)
 
     return
 
@@ -122,21 +131,25 @@ def _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, l
 
 ## output
 
-def run(active, out_fname, lc_rs_path, lc_rs_name, crop_path, urban_path, lake_path, ice_path,
-        wetland_path, harvest_path, harvest_name, grazing_path, grazing_names, assoc_path,
-        com_config_dict, out_grid_data, manager, grid_manager, decomp_indices, decomp_ll_limits):
+def run(active, submod_run, submod_dyn, out_fname, lc_rs_path, lc_rs_name, crop_path, urban_path, lake_path, ice_path,
+        wetland_path, harvest_path, harvest_name, grazing_path, grazing_names, veg_assoc_path,
+        com_config_dict, out_grid_data, manager, decomp_indices, decomp_ll_limits):
     if active is False:
-        print(f"Skipping land_type module")
+        logger.info("Skipping land_type module")
         return
 
     # set up the land_type module shared data structure
     # this holds only one year of data, so write it each year
-    lt_manager = LtManager()
-    lt_manager.start()
-    lt_year_data = lt_manager.LtData()
-    lt_year_data.allocate()
+    lt_year_data = LtData()
+    lt_year_data.allocate(n_cells=sum(len(t) for t in decomp_indices))
+    lt_year_data.cell_idx[:] = np.arange(sum(len(t) for t in decomp_indices))
 
-    print(f"Processing land_type module with parameters:")
+    #lt_manager = LtManager()
+    #lt_manager.start()
+    #lt_year_data = lt_manager.LtData()
+    #lt_year_data.allocate()
+
+    logger.info("Processing land_type module")
     # todo: print the parameters here
 
     # extract common parameters from shared config dict
@@ -146,31 +159,53 @@ def run(active, out_fname, lc_rs_path, lc_rs_name, crop_path, urban_path, lake_p
 
     # processing code for land_type
     years = np.arange(start_year, end_year + 1)
-    output_file = Path(out_path) / out_fname
+    #output_file = Path(out_path) / out_fname
 
     prev_year = None
 
     # 1. Loop over desired years
     for year in years:
         # 2. Process single year
-        print(f"  Processing year: {year}")
-        _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, lc_rs_name, crop_path, urban_path,
-                             lake_path, ice_path, wetland_path, harvest_path, harvest_name, grazing_path, grazing_names, assoc_path, com_config_dict, out_grid_data,
-                             manager, grid_manager, lt_manager, decomp_indices, decomp_ll_limits)
+        logger.info(f"Processing year: {year}")
+        _process_single_year(lt_year_data, year, prev_year, submod_run, submod_dyn, out_fname,
+                            lc_rs_path, lc_rs_name, crop_path, urban_path, lake_path, ice_path,
+                            wetland_path, harvest_path, harvest_name, grazing_path, grazing_names,
+                            veg_assoc_path, com_config_dict, out_grid_data, manager,
+                            decomp_indices, decomp_ll_limits)
         
 
 
-        # append this year's data to the output file
+        # no - would have to read in while file to reverse the order - append this year's data to the output file
         # these data may need to be appended chunk by chunk if memory is an issue, but try writing the whole year at once first
-        # todo: can we prepend data is going backwards in time, so that the output file is in chronological order?
-        #    otherwise need to write it after all years are processed 
+        # todo: can write each year, then combine at end in proper order 
+
+        # set timevars in shared_data for each data class
+        # for now:
+        varnames = ['pct_pft', 'pct_ocean']
+        timevars = ['pct_pft']
+
+        # insert _<year> before the extension (or at the end if no extension)
+        out_fname_p = Path(out_fname)
+        out_fname_year = f"{out_fname_p.stem}_{year}{out_fname_p.suffix}"
+
+        landgen_io.write_module_netcdf(out_grid_data, lt_year_data, out_path, out_fname_year,
+                        year=year, timevars=timevars, varnames=varnames, ll_limits=None)
 
         prev_year = year
 
+    # todo: combine the annual files into one file in the correct time order
+    # can use xarray.open_mfdataset(sorted_files) or ncrcat 
 
+
+    ## todo: this is temporary for testing? or maybe not?
+    # just plot the start year for now
+    plot_fname_year = f"{out_fname_year.stem}_{start_year}{out_fname_year.suffix}"
+    tools.plot_module_netcdf(file_path, out_path, start_year, varnames=varnames, layers=None,
+                       plot_type='scatter', file_type='pdf',
+                       colormap='viridis', ll_limits=None)
 
     # free the module-specific shared data structure
     lt_year_data = None
-    lt_manager.shutdown()
+    #lt_manager.shutdown()
     return
         

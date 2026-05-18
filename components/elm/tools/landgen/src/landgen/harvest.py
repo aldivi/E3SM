@@ -6,12 +6,15 @@
 # run() function is the main entry point for this module, and will be called by process_single_year in land_type.py
 
 import multiprocessing as mp
+import logging
 from pathlib import Path
 from . import shared_data
 from . import landgen_io
 # import normalize_cell # not created yet
 import pandas as pd
 import os
+
+logger = logging.getLogger('landgen')
 
 ########## define some module-specific constants here
 
@@ -41,7 +44,7 @@ def harvest_process(lt_year_data, year, harvest_path, harvest_name, grazing_path
                     com_config_dict, out_grid_data, ll_limits, cell_ids,
                     global_mesh_df, man_lock, grid_lock, lt_lock):
 
-    print(f"Processing harvest and grazing module year {year} with parameters:")
+    logger.info(f"Processing harvest and grazing module year {year}")
 
     # each worker writes its temp files to a unique subdirectory to avoid collisions
     min_lat, max_lat, min_lon, max_lon = ll_limits

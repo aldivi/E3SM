@@ -8,10 +8,13 @@
 
 import multiprocessing as mp
 import importlib
+import logging
 import sys
 from pathlib import Path
 from . import shared_data
 from .shared_data import TopoData, TopoManager
+
+logger = logging.getLogger('landgen')
 
 
 ########## define helper functions for land_type run() here
@@ -31,18 +34,18 @@ from .shared_data import TopoData, TopoManager
 
 ## output
 
-def run(active, out_fname, com_config_dict, out_grid_data, manager, grid_manager, decomp_indices, decomp_ll_limits):
+def run(active, out_fname, com_config_dict, out_grid_data, manager, decomp_indices, decomp_ll_limits):
     if active is False:
-        print(f"Topography processing is not active, but reading in landfrac data for other active modules.")
+        logger.info("Topography processing is not active, but reading in landfrac data for other active modules.")
         output_file = Path(com_config_dict['out_path']) / out_fname
         if output_file.exists():
-            print(f"Output file {output_file} exists; reading in existing data.")
+            logger.info(f"Output file {output_file} exists; reading in existing data.")
             ## todo: need to define read_landfrac to return the data in the correct format for the shared data structure
             ## may need to add elevation to GridData class and here
             out_grid_data.landfrac = read_landfrac(output_file)
         else:
-            print(f"Error: Output file {output_file} does not exist; set active to True to process topography data.")
-            sys.exit(1)
+            raise FileNotFoundError(
+                f"Output file {output_file} does not exist; set active to True to process topography data.")
 
     # set up the topography module shared data structure
     topo_manager = TopoManager()
@@ -50,7 +53,7 @@ def run(active, out_fname, com_config_dict, out_grid_data, manager, grid_manager
     topo_out_data = topo_manager.TopoData()
     topo_out_data.allocate()
 
-    print(f"Processing topography module with parameters:")
+    logger.info("Processing topography module")
     # todo: print the parameters here
 
 
