@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 from . import shared_data
 from . import landgen_io
+from . import tools
 # import normalize_cell # not created yet
 import pandas as pd
 import os
@@ -114,22 +115,24 @@ def run(lt_year_data, year, prev_year, harvest_path, harvest_name, grazing_path,
     global_mesh_df = pd.read_parquet(global_parquet_path)
     print(f"  Loaded HEALPix mesh: {len(global_mesh_df)} cells from {global_parquet_path}")
 
-    # number of available cpu cores (set by SBATCH during job submission)
-    omp_threads_str = os.environ.get('OMP_NUM_THREADS')
+    # Determine the number of worker processes to use.
+    # Priority: SRUN_CPUS_PER_TASK -> SLURM_CPUS_PER_TASK -> SLURM_CPUS_ON_NODE -> mp.cpu_count()
+    in_slurm = os.environ.get('SLURM_JOB_ID') is not None
 
-    if omp_threads_str is not None:
-        try:
-            # Convert the string value to an integer
-            omp_threads_int = int(omp_threads_str)
-            print(f"OMP_NUM_THREADS is set to: {omp_threads_int}")
-        except ValueError:
-            print(f"OMP_NUM_THREADS is set to an invalid integer value: {omp_threads_str}")
+    omp_threads_int = (
+        tools.parse_cpu_env('SRUN_CPUS_PER_TASK') or
+        tools.parse_cpu_env('SLURM_CPUS_PER_TASK') or
+        tools.parse_cpu_env('SLURM_CPUS_ON_NODE') or
+        mp.cpu_count()
+    )
+
+    if in_slurm:
+        logger.info(f"Running under SLURM (job {os.environ['SLURM_JOB_ID']}): using {omp_threads_int} workers "
+                    f"(SRUN_CPUS_PER_TASK={os.environ.get('SRUN_CPUS_PER_TASK')}, "
+                    f"SLURM_CPUS_PER_TASK={os.environ.get('SLURM_CPUS_PER_TASK')}, "
+                    f"SLURM_CPUS_ON_NODE={os.environ.get('SLURM_CPUS_ON_NODE')})")
     else:
-        print("OMP_NUM_THREADS environment variable is not set.")
-        # If not set, set to total cores on the node
-        omp_threads_int = mp.cpu_count()
-        print(f"Using total cores: {omp_threads_int}, but this may fail if "
-              "SBATCH --cpus-per-task is set to a lower number or SBATCH --exclusive is not set")
+        logger.info(f"Running locally: using {omp_threads_int} workers (mp.cpu_count())")
 
     # set up the pool and call the harvest_process() function for each chunk of data
     # chunks are defined by the lat-lon limits and corresponding landgen grid cell ids for the chunk;

@@ -10,10 +10,10 @@ import importlib
 import logging
 from pathlib import Path
 from . import shared_data
-from shared_data import LtData, LtManager
+from .shared_data import LtData
 import numpy as np
-impoart . landgen_io
-import . tools
+from . import landgen_io
+from . import tools
 
 logger = logging.getLogger('landgen')
 
@@ -21,7 +21,7 @@ logger = logging.getLogger('landgen')
 
 
 ##### _process_single_year()
-def _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, lc_rs_name, crop_path, urban_path,
+def _process_single_year(lt_year_data, year, prev_year, submod_run, submod_dyn, out_fname, lc_rs_path, lc_rs_name, crop_path, urban_path,
                          lake_path, ice_path, wetland_path, harvest_path, harvest_name, grazing_path, grazing_names,
                          veg_assoc_path, com_config_dict, out_grid_data,
                          manager, decomp_indices, decomp_ll_limits):
@@ -79,7 +79,7 @@ def _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, l
         lc_data = ice.run(lt_year_data, year, prev_year, ice_path, com_config_dict, out_grid_data,
                             decomp_indices, decomp_ll_limits, manager)
 
-    if submod_run['wetland']:
+    #if submod_run['wetland']:
         # Process wetland data - adjust lc wetland area
         # (may not be needed as the main source is currently the modis cover data;
         #  can allow for this in the future)
@@ -95,11 +95,11 @@ def _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, l
                         grazing_names, com_config_dict, out_grid_data, manager)
 
     # Normalize cell
-    normalize_cell = importlib.import_module('landgen.normalize_cell')
-    lc_data = normalize_cell.fill_land(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits,
-                    manager)       # fill_land
-    lc_data = normalize_cell.reconcile_ocean(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits,
-                    manager)  # reconcile_ocean
+    #normalize_cell = importlib.import_module('landgen.normalize_cell')
+    #lc_data = normalize_cell.fill_land(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits,
+    #                manager)       # fill_land
+    #lc_data = normalize_cell.reconcile_ocean(lt_year_data, out_grid_data, decomp_indices, decomp_ll_limits,
+    #               manager)  # reconcile_ocean
 
     if submod_run['veg_assoc']:
         # Process veg-associated data
@@ -108,8 +108,8 @@ def _process_single_year(lt_year_data, year, prev_year, out_fname, lc_rs_path, l
                             decomp_indices, decomp_ll_limits, manager)
 
     # Ensure consistency
-    consistency = importlib.import_module('landgen.consistency')
-    lc_data = consistency.run(lt_year_data, year, out_grid_data, decomp_indices, decomp_ll_limits, manager)
+    #consistency = importlib.import_module('landgen.consistency')
+    #lc_data = consistency.run(lt_year_data, year, out_grid_data, decomp_indices, decomp_ll_limits, manager)
 
     return
 
@@ -172,7 +172,6 @@ def run(active, submod_run, submod_dyn, out_fname, lc_rs_path, lc_rs_name, crop_
                             wetland_path, harvest_path, harvest_name, grazing_path, grazing_names,
                             veg_assoc_path, com_config_dict, out_grid_data, manager,
                             decomp_indices, decomp_ll_limits)
-        
 
 
         # no - would have to read in while file to reverse the order - append this year's data to the output file
@@ -199,9 +198,11 @@ def run(active, submod_run, submod_dyn, out_fname, lc_rs_path, lc_rs_name, crop_
 
     ## todo: this is temporary for testing? or maybe not?
     # just plot the start year for now
-    plot_fname_year = f"{out_fname_year.stem}_{start_year}{out_fname_year.suffix}"
-    tools.plot_module_netcdf(file_path, out_path, start_year, varnames=varnames, layers=None,
-                       plot_type='scatter', file_type='pdf',
+    #plot_fname_year = f"{out_fname_year.stem}_{start_year}{out_fname_year.suffix}"
+    ncdf_path = Path(out_path) / out_fname_year
+    print_layers = [0, 1]
+    tools.plot_module_netcdf(ncdf_path, out_path, start_year, varnames=varnames, layers=print_layers,
+                       plot_type='scatter', file_type='png',
                        colormap='viridis', ll_limits=None)
 
     # free the module-specific shared data structure
