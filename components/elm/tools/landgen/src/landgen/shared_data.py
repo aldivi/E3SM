@@ -8,6 +8,7 @@
 # the shared custom data structures are registered in main()
 
 import multiprocessing as mp
+from multiprocessing import Lock
 from multiprocessing.managers import BaseManager
 import numpy as np
 
@@ -17,7 +18,7 @@ import numpy as np
 
 # LtData dimensions
 n_pfts_default = 51
-n_harvest_default = 5
+n_harvest_default = 10
 n_grazing_default = 2
 n_elev_default = 61
 n_elev_edges_default = 62
@@ -46,7 +47,7 @@ n_levslp_default = 11
 # multiprocessing workers.  All arrays are float64 except cell_id (int64).
 # This can be used for any grid, but we currently use a healpix grid
 # n_cells: number of 'land' cells in the landgen out grid
-#    lon_xy and lat_xy are the cell 'center' coordinates
+#    lon_cen and lat_cen are the cell 'center' coordinates
 #    lon_vtx and lat_vtx are the vertex coordinates for each cell
 #    n_vertices: number of vertices per cell (4 for quadrilateral cells)
 # landfrac is determined by the topography processing, so initialize to 1 here
@@ -55,12 +56,11 @@ class GridData:
     """Per-cell grid geometry container (cell ids, coordinates, landfrac)."""
 
     def __init__(self):
-
         self.num_cells   = None    # int     - number of 'land' cells in out grid
         self.num_vertices   = None    # int  - number of vertices per cell
         self.cell_id  = None    # int64   [n_cells]
-        self.lon_xy   = None    # float64 [n_cells]
-        self.lat_xy   = None    # float64 [n_cells]
+        self.lon_cen   = None    # float64 [n_cells]
+        self.lat_cen   = None    # float64 [n_cells]
         self.cell_area = None   # float64 [n_cells]
         self.landfrac = None    # float64 [n_cells]
         self.lon_vtx  = None    # float64 [n_cells, n_vertices]
@@ -72,8 +72,8 @@ class GridData:
         self.num_cells   = n_cells
         self.num_vertices = n_vertices
         self.cell_id  = np.zeros(n_cells,               dtype=np.int64)
-        self.lon_xy   = np.zeros(n_cells,               dtype=np.float64)
-        self.lat_xy   = np.zeros(n_cells,               dtype=np.float64)
+        self.lon_cen   = np.zeros(n_cells,               dtype=np.float64)
+        self.lat_cen   = np.zeros(n_cells,               dtype=np.float64)
         self.cell_area = np.zeros(n_cells,              dtype=np.float64)
         self.landfrac = np.ones(n_cells,                dtype=np.float64)
         self.lon_vtx  = np.zeros((n_cells, n_vertices), dtype=np.float64)
@@ -81,8 +81,8 @@ class GridData:
 
     # --- getter methods (needed for proxy access via GridManager) ---
     def get_cell_id(self):   return self.cell_id
-    def get_lon_xy(self):    return self.lon_xy
-    def get_lat_xy(self):    return self.lat_xy
+    def get_lon_cen(self):    return self.lon_cen
+    def get_lat_cen(self):    return self.lat_cen
     def get_cell_area(self): return self.cell_area
     def get_landfrac(self):  return self.landfrac
     def get_lon_vtx(self):   return self.lon_vtx
@@ -91,8 +91,8 @@ class GridData:
 
     # --- setter methods (needed for proxy access via GridManager) ---
     def set_cell_id(self, v):   self.cell_id   = v
-    def set_lon_xy(self, v):    self.lon_xy    = v
-    def set_lat_xy(self, v):    self.lat_xy    = v
+    def set_lon_cen(self, v):    self.lon_cen    = v
+    def set_lat_cen(self, v):    self.lat_cen    = v
     def set_cell_area(self, v): self.cell_area = v
     def set_landfrac(self, v):  self.landfrac  = v
     def set_lon_vtx(self, v):   self.lon_vtx   = v
@@ -119,6 +119,7 @@ class TopoData:
     """Per-cell topography data container for the landgen workflow."""
 
     def __init__(self):
+        self.cell_idx  = None           # int64   [n_cells]
         self.topo            = None    # float64 [n_cells]          - topographic height
         self.std_elev        = None    # float32 [n_cells]          - standard deviation of elevation
         self.slope           = None    # float64 [n_cells]          - mean slope
@@ -132,6 +133,7 @@ class TopoData:
     def allocate(self, n_cells=n_cells_default, n_levslp=n_levslp_default):
         """Allocate all arrays given dimension sizes."""
         g = n_cells
+        self.cell_idx        = np.zeros(g,              dtype=np.int64)
         self.topo            = np.zeros(g,              dtype=np.float64)
         self.std_elev        = np.zeros(g,              dtype=np.float32)
         self.slope           = np.zeros(g,              dtype=np.float64)
@@ -162,7 +164,7 @@ TopoManager.register('TopoData', TopoData)
 # These data are on the landgen grid defined by GridData 
 # n_cells: number of 'land' cells in the landgen grid
 # n_pfts: number of plant functional types (51, includes bare and crop functional types)
-# n_harvest: number of harvest types (5: luh categories)
+# n_harvest: number of harvest types (10: luh categories)
 # n_grazing: number of grazing types (2: pasture (grass, intensive) and rangeland)
 # n_elev: number of elevation bins for glacier cover (currently 61, may change)
 # n_elev_edges: number of elevation bin edges for glacier cover (n_elev + 1)
@@ -177,8 +179,8 @@ class LtData:
     """Per-cell landcover data container for the landgen workflow."""
 
     def __init__(self):
-
         # 1-D grid arrays  [n_cells]
+        self.cell_idx  = None                  # int64   [n_cells]
         self.pct_ocean          = None         # float64
         self.lake_depth         = None         # float64
         self.lake_depth_mask    = None         # float64
@@ -246,6 +248,7 @@ class LtData:
                 n_density=n_density_default, n_month=n_month_default, n_levurb=n_levurb_default,
                 n_rad=n_rad_default, n_solar=n_solar_default, n_vocveg=n_vocveg_default):
         """Allocate all arrays given dimension sizes."""
+        self.cell_idx           = np.zeros(n_cells, dtype=np.int64)
         self.pct_ocean          = np.zeros(n_cells, dtype=np.float64)
         self.lake_depth         = np.zeros(n_cells, dtype=np.float64)
         self.lake_depth_mask    = np.zeros(n_cells, dtype=np.float64)
@@ -302,6 +305,70 @@ class LtData:
         self.cv_wall            = np.zeros((n_cells, n_levurb),   dtype=np.float64)
         self.cv_improad         = np.zeros((n_cells, n_levurb),   dtype=np.float64)
 
+## todo: delete these if we are not using the manager proxy
+    # getter methods for manager proxy
+    def get_harvest_frac(self):  return self.harvest_frac
+    def get_harvest_mass(self):  return self.harvest_mass
+    def get_grazing_frac(self):  return self.grazing_frac
+    def get_pct_pft(self):       return self.pct_pft
+    def get_pct_ocean(self):     return self.pct_ocean
+    def get_pct_lake(self):      return self.pct_lake
+    def get_pct_wetland(self):   return self.pct_wetland
+    def get_pct_glacier(self):   return self.pct_glacier
+    def get_pct_urban(self):     return self.pct_urban
+
+    # setter methods for manager proxy
+    def set_harvest_frac(self, cell_ids, i, values):
+        self.harvest_frac[cell_ids, i] = values
+    def set_harvest_mass(self, cell_ids, i, values):
+        self.harvest_mass[cell_ids, i] = values
+    def set_grazing_frac(self, cell_ids, i, values):
+        self.grazing_frac[cell_ids, i] = values
+    def set_pct_pft(self, cell_ids, i, values):
+        self.pct_pft[cell_ids, i] = values
+##
+
+    def copy_from(self, source, varnames):
+        """Copy listed variable values from a chunk LtData object into self.
+
+        Uses source.cell_idx to identify which global cell positions in self
+        receive the data.  Works for 1-D, 2-D, and 3-D arrays alike because
+        numpy fancy indexing on the first axis handles all shapes uniformly.
+
+        bin_centers and bin_edges have no n_cells dimension; they are copied
+        directly (full array assignment) rather than via cell_idx.
+
+        Args:
+            source (LtData): Chunk object whose data are to be merged in.
+                             source.cell_idx must already be set to the
+                             global cell indices corresponding to source's
+                             local 0..n_cells-1 positions.
+            varnames (list[str]): Names of LtData attributes to copy.
+
+        Raises:
+            AttributeError: If a name in varnames is not an attribute of LtData.
+            ValueError:     If source.cell_idx is None (not set).
+        """
+        if source.cell_idx is None:
+            raise ValueError("copy_from: source.cell_idx is None; call set_cell_idx() before copy_from().")
+
+        # variables that have no n_cells first dimension
+        _no_cell_dim = {'bin_centers', 'bin_edges'}
+
+        idx = source.cell_idx  # 1-D int64 array of global cell positions
+
+        for name in varnames:
+            if not hasattr(self, name):
+                raise AttributeError(f"copy_from: LtData has no attribute '{name}'.")
+            if not hasattr(source, name):
+                raise AttributeError(f"copy_from: source LtData has no attribute '{name}'.")
+            src_val = getattr(source, name)
+            if src_val is None:
+                continue   # source variable was never set; skip silently
+            if name in _no_cell_dim:
+                getattr(self, name)[:] = src_val
+            else:
+                getattr(self, name)[idx] = src_val
 
 # ---------------------------------------------------------------------------
 # LtManager: custom BaseManager that can vend LtData proxy objects to
@@ -311,8 +378,3 @@ class LtManager(BaseManager):
     pass
 
 LtManager.register('LtData', LtData)
-
-
-
-
-
